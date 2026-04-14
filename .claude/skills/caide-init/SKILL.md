@@ -170,7 +170,7 @@ If the user confirms, clone or download each missing skill from the CAIDE skills
 repository:
 
 ```
-SKILLS_REPO=https://github.com/[CAIDE_REPO_PLACEHOLDER]/claude-llm-code
+SKILLS_REPO=https://github.com/ImLp/claude-caide
 SKILLS_BASE=$SKILLS_REPO/raw/main/.claude/skills
 ```
 

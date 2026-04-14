@@ -1259,11 +1259,24 @@ EOF
 
 Open the repository root in Obsidian as a new vault. Install the **Dataview** and **Templater** plugins.
 
-### Step 3 — Create CLAUDE.md
+### Step 3 — Install CAIDE
 
-Paste the full `CLAUDE.md` schema from Section 4 into the repository root as `CLAUDE.md`.
+Clone the official CAIDE repository and copy the skills and CLAUDE.md template into your project:
 
-Customize:
+```bash
+# Clone the CAIDE repo alongside your project (or into a temp dir)
+git clone https://github.com/ImLp/claude-caide.git /tmp/claude-caide
+
+# Copy the skill definitions into your project
+cp -r /tmp/claude-caide/.claude/skills .claude/
+
+# Copy the CLAUDE.md template to your project root
+cp /tmp/claude-caide/CLAUDE.md ./CLAUDE.md
+```
+
+Alternatively, paste the full `CLAUDE.md` schema from Section 4 manually.
+
+Customize your `CLAUDE.md`:
 - `## Project` — project name, language(s), build system, domain.
 - `## Source-Like Directories` — any directories beyond `src/` to index.
 
@@ -1338,6 +1351,7 @@ The wiki is now live and compounding.
 
 | Resource | Type | Notes |
 | :--- | :--- | :--- |
+| `ImLp/claude-caide` | GitHub repo | **Official CAIDE repo** — canonical CLAUDE.md template and `.claude/skills/` definitions |
 | `ScrapingArt/Karpathy-LLM-Wiki-Stack` | GitHub repo | Original LLM Wiki blueprint this project was forked from |
 | `SamurAIGPT/llm-wiki-agent` | GitHub repo | Full agent implementation (adapt for CAIDE page types) |
 | `huytieu/COG-second-brain` | GitHub repo | Self-evolving template with hooks |
