@@ -1,0 +1,3 @@
+#### Claude Code ####
+# Do not commit local save files to the repository
+settings.local.json
