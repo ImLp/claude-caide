@@ -17,144 +17,260 @@ all existing files are preserved; only missing pieces are created.
 
 ---
 
+## STRICT OPERATING RULES
+
+These rules override all default assistant behavior and MUST be followed at all times:
+
+1. **No independent file evaluation.** Do NOT read, enumerate, glob, or inspect ANY
+   source files, directories, or file extensions at any point in this skill UNLESS
+   the user explicitly chooses AUTO-DISCOVER for that specific phase. Even then,
+   perform only the exact operations described in that phase — nothing more.
+
+2. **No user-level settings checks.** Only check paths relative to the current working
+   directory (the repo root). Never access `~/.claude/`, user-global paths, or any path
+   outside the repo.
+
+3. **No phase proceeds without user confirmation.** After each phase completes, explicitly
+   wait for the user to confirm they are ready to continue. Do not advance automatically.
+
+4. **Preflight is the only phase that runs without a preceding prompt.** All subsequent
+   phases require the user to respond before any action is taken.
+
+5. **Ask, then act.** For every phase, present the questions first, wait for the user's
+   full response, then perform any file operations. Never interleave questions with
+   file reads or writes.
+
+6. **Do exactly what the phases describe — nothing else.** Do not attempt to understand
+   the codebase, summarize code patterns, or make inferences beyond what is explicitly
+   instructed in each phase.
+
+---
+
 ## Workflow
 
-Work through the phases below sequentially. Complete each phase fully before moving
-to the next. Display a phase header to the user as you enter each phase.
+### STEP 0 — Display Phase Checklist
+
+Before doing anything else, display this task list to the user:
+
+```
+CAIDE Bootstrap — Phase Plan
+─────────────────────────────────────────────────────
+[ ] Phase 0 — Preflight Check      (runs now, no input needed)
+[ ] Phase 1 — Project Identity     (requires your input)
+[ ] Phase 2 — Source Directories   (requires your input)
+[ ] Phase 3 — Skills Installation  (requires your input)
+[ ] Phase 4 — Generate CLAUDE.md   (writes files after your confirmation)
+[ ] Phase 5 — Wiki Scaffold        (writes files after your confirmation)
+[ ] Phase 6 — Obsidian Config      (writes files after your confirmation)
+[ ] Phase 7 — Final Report         (summary only)
+─────────────────────────────────────────────────────
+Starting Phase 0 — Preflight Check…
+```
+
+Then immediately proceed to Phase 0. No user input is needed before Phase 0.
 
 ---
 
 ### PHASE 0 — Preflight Check
 
-Before asking the user anything, silently check the current working directory for:
+Check ONLY the following explicit file and directory paths — relative to the repo root.
+Do NOT walk the directory tree, enumerate files, or check any other paths.
 
-1. **Existing CLAUDE.md** — if found, inform the user it already exists and ask:
-   > "A `CLAUDE.md` already exists. Would you like to (a) reinitialize it from
-   > scratch, (b) update only the missing sections, or (c) skip CLAUDE.md generation
-   > entirely?"
-   Honor the user's answer throughout the rest of this skill.
+**Exact paths to check:**
 
-2. **Existing wiki/ directory** — note whether it exists (you will skip scaffold
-   creation for any files already present).
+| Path                       | What to note                                              |
+|----------------------------|-----------------------------------------------------------|
+| `./CLAUDE.md`              | Exists → will ask user how to handle it                   |
+| `./wiki/`                  | Exists → scaffold files will not be overwritten           |
+| `./wiki/index.md`          | Exists → will skip creation                               |
+| `./wiki/log.md`            | Exists → will skip creation                               |
+| `./wiki/overview.md`       | Exists → will skip creation                               |
+| `./wiki/hot.md`            | Exists → will skip creation                               |
+| `./.claude/skills/scan/`   | Exists → skill already installed                          |
+| `./.claude/skills/health/` | Exists → skill already installed                          |
+| `./.claude/skills/impact/` | Exists → skill already installed                          |
+| `./.claude/skills/adr/`    | Exists → skill already installed                          |
+| `./.claude/skills/recall/` | Exists → skill already installed                          |
+| `./.claude/skills/trace/`  | Exists → skill already installed                          |
+| `./.obsidian/app.json`     | Exists → will merge rather than overwrite                 |
 
-3. **Existing .claude/skills/ directory (local to this repo)** — note which skill
-   directories are already present so you know what to install later.
+After checking all paths, report the preflight summary as a bulleted list:
 
-4. **Existing .obsidian/app.json** — if found, note it; you will merge into it
-   rather than overwrite it in Phase 5.
+```
+Preflight Results:
+  • CLAUDE.md         — [found | not found]
+  • wiki/             — [found | not found]
+  • wiki/index.md     — [found | not found]
+  • wiki/log.md       — [found | not found]
+  • wiki/overview.md  — [found | not found]
+  • wiki/hot.md       — [found | not found]
+  • skills/scan       — [installed | missing]
+  • skills/health     — [installed | missing]
+  • skills/impact     — [installed | missing]
+  • skills/adr        — [installed | missing]
+  • skills/recall     — [installed | missing]
+  • skills/trace      — [installed | missing]
+  • .obsidian/app.json — [found | not found]
+```
 
-Report the preflight summary to the user in a short bulleted list before asking Phase 1
-questions.
+**Decision logic:**
+
+- If ALL files are present AND all skills are installed → inform the user that CAIDE
+  appears to be fully configured, display the checklist as all checked, and ask:
+  > "CAIDE is already set up in this repository. Would you like to (a) re-run the
+  > full bootstrap to update or fix anything, or (b) exit?"
+  If the user chooses to exit, stop here. Do not proceed further.
+
+- If ANY file is missing OR any skill is missing → continue to Phase 1.
+  Before continuing, tell the user exactly which items are missing and ask:
+  > "Some items are missing. I will now walk you through each phase to set them up.
+  > Ready to continue? (yes/no)"
+  Wait for the user to respond "yes" before proceeding.
+
+Mark Phase 0 as complete in the checklist: `[x] Phase 0 — Preflight Check`
 
 ---
 
 ### PHASE 1 — Project Identity
 
-Ask the user the following questions. You may ask them all at once in a numbered list
-to minimize back-and-forth.
+**Show the updated checklist** with Phase 0 checked, Phase 1 in progress:
+```
+[x] Phase 0 — Preflight Check
+[→] Phase 1 — Project Identity
+[ ] Phase 2 — Source Directories
+...
+```
+
+Ask the user ALL of the following questions in a single numbered list.
+Wait for the user's complete response before doing anything else.
 
 ```
-I need a few details to generate your CLAUDE.md.
+Phase 1 — Project Identity
 
 1. What is the project name?
-2. Would you like me to AUTO-DISCOVER the primary programming language(s), build
-   system, and domain — or would you prefer to describe them yourself?
-   → If AUTO: I will inspect file extensions, build files (CMakeLists.txt,
-     package.json, Cargo.toml, pyproject.toml, build.gradle, Makefile, etc.),
-     and top-level README to infer these. I will show you my findings before
-     writing anything.
-   → If MANUAL: Please describe: language(s), build system, and primary domain
-     (e.g., "C++17, CMake — real-time graphics engine for AAA games").
+
+2. How would you like to identify the primary programming language(s), build system,
+   and domain?
+
+   (a) AUTO-DISCOVER — I will search for build manifest files only (e.g.,
+       CMakeLists.txt, package.json, Cargo.toml, etc.) and inspect file extension
+       distribution at the root and one level deep. I will NOT read any file contents.
+       I will show you my findings before writing anything.
+
+   (b) MANUAL — You describe them yourself.
+       Example: "C++17, CMake — real-time graphics engine for AAA games"
 ```
 
-**If AUTO-DISCOVER chosen:**
-- Glob for build manifests: `CMakeLists.txt`, `package.json`, `Cargo.toml`,
-  `pyproject.toml`, `*.csproj`, `build.gradle`, `Makefile`, `*.sln`, `*.xcodeproj`,
-  `go.mod`, `mix.exs`, `*.cabal`.
-- Inspect file extension distribution in the root and up to two levels deep (do NOT
-  read file contents — just enumerate extensions).
-- Summarize findings to the user: e.g., "I detected: C++ (primary), CMake build
-  system, real-time simulation domain (inferred from directory names)."
-- Ask the user to confirm or correct before proceeding.
+Wait for the user's response. Then:
 
-Store the final result as: `{PROJECT_DESCRIPTION}` — a single line suitable for the
+**If the user chose (a) AUTO-DISCOVER:**
+- Glob ONLY for these exact build manifest filenames at the repo root:
+  `CMakeLists.txt`, `package.json`, `Cargo.toml`, `pyproject.toml`, `Makefile`,
+  `go.mod`, `mix.exs`, `build.gradle`, `*.csproj`, `*.sln`, `*.xcodeproj`, `*.cabal`
+- Enumerate file extensions found in the root and one level deep. Do NOT read any
+  file contents. Do NOT traverse deeper than two levels.
+- Summarize findings to the user. Example:
+  > "I detected: build files → CMakeLists.txt; common extensions → .cpp, .h, .glsl"
+- Ask the user to confirm or correct before continuing.
+
+**If the user chose (b) MANUAL:**
+- Accept the user's description as-is.
+
+Store the confirmed result as `{PROJECT_DESCRIPTION}` — a single line suitable for the
 `## Project` section of CLAUDE.md.
+
+After the user has confirmed their answers, tell them Phase 1 is complete and ask:
+> "Phase 1 complete. Ready to move to Phase 2 — Source Directories? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 1 complete: `[x] Phase 1 — Project Identity`
 
 ---
 
 ### PHASE 2 — Source-Like Directories
 
-Ask the user:
+**Show the updated checklist.**
+
+Ask the user ALL of the following in a single message.
+Wait for the user's complete response before taking any action.
 
 ```
+Phase 2 — Source-Like Directories
+
 3. How would you like to identify your source-like directories?
-   → AUTO: I will walk the directory tree and identify candidate directories.
-     I will NOT read file contents. I will use any .gitignore, .claudeignore,
-     .p4ignore, or .hgignore files to exclude noise.
-   → MANUAL: Tell me which directories to include (e.g., src/, lib/, assets/shaders/).
+
+   (a) AUTO-DISCOVER — I will walk the directory tree ONE level deep and classify
+       directories by their contents. I will NOT read any file contents. I will
+       use any .gitignore / .claudeignore files found at the repo root to exclude
+       noise. I will show you my findings before writing anything.
+
+   (b) MANUAL — List the directories yourself.
+       Example: src/, lib/, assets/shaders/
 ```
 
-**If AUTO chosen:**
+Wait for the user's response. Then:
 
-a. Read all ignore files found at the repo root (`.gitignore`, `.claudeignore`,
-   `.p4ignore`, `.npmignore`, `.hgignore`). Extract the directory-level exclusion
-   patterns (lines ending in `/`, or bare directory names). Common directories to
-   always exclude regardless:
-   - `node_modules/`, `.git/`, `.svn/`, `.hg/`, `dist/`, `build/`, `out/`,
-     `target/`, `__pycache__/`, `.cache/`, `coverage/`, `.next/`, `.nuxt/`,
-     `vendor/`, `Pods/`, `.gradle/`, `bin/`, `obj/`, `tmp/`, `temp/`,
-     `wiki/`, `.claude/`, `.obsidian/`, `.idea/`, `.vscode/`
+**If the user chose (a) AUTO-DISCOVER:**
 
-b. Walk only one level deep from the repo root. For each directory not excluded:
-   - Classify as **source-like** if it contains source file extensions
-     (`.cpp`, `.c`, `.h`, `.hpp`, `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs`,
-     `.go`, `.cs`, `.java`, `.kt`, `.swift`, `.rb`, `.ex`, `.elm`, `.hs`,
-     `.lua`, `.glsl`, `.hlsl`, `.wgsl`, `.metal`, `.shader`).
-   - Classify as **asset-like** if it contains non-code files only
-     (`.png`, `.jpg`, `.wav`, `.mp3`, `.ogg`, `.fbx`, `.obj`, `.gltf`).
-   - Classify as **config-like** if it contains only `.json`, `.yaml`, `.toml`,
-     `.ini`, `.cfg`.
-   - Classify as **script-like** if it contains `.sh`, `.ps1`, `.bat`, `.py`
-     scripts alongside no primary source.
+a. Read ONLY these specific ignore files if they exist at the repo root — do not
+   search for them recursively:
+   `.gitignore`, `.claudeignore`, `.p4ignore`, `.npmignore`, `.hgignore`
+   Extract directory-level exclusion patterns (lines ending in `/` or bare directory
+   names). Always exclude these regardless of ignore files:
+   `node_modules/`, `.git/`, `.svn/`, `.hg/`, `dist/`, `build/`, `out/`,
+   `target/`, `__pycache__/`, `.cache/`, `coverage/`, `.next/`, `.nuxt/`,
+   `vendor/`, `Pods/`, `.gradle/`, `bin/`, `obj/`, `tmp/`, `temp/`,
+   `wiki/`, `.claude/`, `.obsidian/`, `.idea/`, `.vscode/`
 
-c. Present findings to the user in a table:
+b. Walk ONLY one level deep from the repo root. For each non-excluded directory:
+   - Classify as **source-like** if it contains source file extensions.
+   - Classify as **asset-like** if it contains only non-code files.
+   - Classify as **config-like** if it contains only config files.
+   - Classify as **script-like** if it contains script files.
+
+c. Present findings in a table:
 
    ```
-   Detected source-like directories:
+   Detected directories:
    ┌──────────────────────┬────────────┬──────────────────────────┐
    │ Directory            │ Type       │ Primary extensions found  │
    ├──────────────────────┼────────────┼──────────────────────────┤
    │ src/                 │ source     │ .cpp, .h                  │
-   │ lib/                 │ source     │ .cpp, .h                  │
-   │ assets/shaders/      │ source     │ .glsl, .hlsl              │
-   │ scripts/             │ script     │ .py, .sh                  │
-   │ config/              │ config     │ .toml, .yaml              │
    └──────────────────────┴────────────┴──────────────────────────┘
 
    Which of these should be included in ## Source-Like Directories?
-   (Enter directory letters to include, or "all", or tell me what to add/remove.)
+   (Enter letters, "all", or tell me what to add/remove.)
    ```
 
-d. Accept the user's selection. Store the confirmed list as `{SOURCE_DIRS}`.
+d. Wait for the user's selection.
 
-**If MANUAL chosen:**
+**If the user chose (b) MANUAL:**
 Ask the user to list directories and provide a one-line description for each.
-Store as `{SOURCE_DIRS}`.
+
+Store the confirmed list as `{SOURCE_DIRS}`.
+
+After the user has confirmed, tell them Phase 2 is complete and ask:
+> "Phase 2 complete. Ready to move to Phase 3 — Skills Installation? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 2 complete: `[x] Phase 2 — Source Directories`
 
 ---
 
 ### PHASE 3 — Skills Installation
 
-The following CAIDE skills power the `/scan`, `/query`, `/health`, `/impact`,
-`/adr`, `/recall`, and `/trace` commands.
+**Show the updated checklist.**
 
-Check which skill directories already exist under `.claude/skills/` in the **current
-repo** (repo-local) and under the **user-global** `~/.claude/skills/` path.
-
-Present status to the user:
+Using the preflight results from Phase 0, present the skills status to the user.
+Check ONLY `.claude/skills/` relative to the current repo root — do NOT check
+user-global paths, `~/.claude/`, or any path outside this repository.
 
 ```
-CAIDE Skills Status:
+Phase 3 — Skills Installation
+
+CAIDE Skills Status (repo-local only: .claude/skills/):
   /scan    — [installed | missing]
   /health  — [installed | missing]
   /impact  — [installed | missing]
@@ -163,42 +279,63 @@ CAIDE Skills Status:
   /trace   — [installed | missing]
 
 Skills are installed repo-locally under .claude/skills/.
-Would you like me to install any missing skills?
+Would you like me to install any missing skills? (yes/no)
 ```
 
-If the user confirms, clone or download each missing skill from the CAIDE skills
-repository:
+Wait for the user's response.
 
-```
-SKILLS_REPO=https://github.com/ImLp/claude-caide
-SKILLS_BASE=$SKILLS_REPO/raw/main/.claude/skills
-```
+**If the user says yes:**
 
-For each missing skill (e.g., `scan`), fetch:
+Ask for the CAIDE repository URL before attempting any downloads:
+> "What is the CAIDE skills repository URL?
+> (Leave blank to skip skill installation and do it manually later.)"
+
+Wait for the user's response. If they provide a URL, use it. If they leave it blank,
+skip installation and note it in the final report.
+
+If a URL is provided, for each missing skill (e.g., `scan`), fetch:
 ```
-$SKILLS_BASE/scan/SKILL.md  →  .claude/skills/scan/SKILL.md
+{SKILLS_REPO}/raw/main/.claude/skills/scan/SKILL.md → .claude/skills/scan/SKILL.md
 ```
 
 Run the download using `curl -fsSL` or `wget -q -O`. If neither is available,
-instruct the user to manually copy the files from the repository and provide the URL.
+instruct the user to manually copy the files and provide the URL.
 
 After attempting downloads, report success/failure for each skill.
 
-> **Note:** If the user has not yet provided the CAIDE repository URL (the placeholder
-> above), ask them before attempting any downloads:
-> "What is the CAIDE skills repository URL? (Leave blank to skip skill installation
-> and do it manually later.)"
+**If the user says no:**
+Note all skills as skipped in the final report.
+
+After the user's response is handled, ask:
+> "Phase 3 complete. Ready to move to Phase 4 — Generate CLAUDE.md? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 3 complete: `[x] Phase 3 — Skills Installation`
 
 ---
 
 ### PHASE 4 — Generate CLAUDE.md
 
-Using the collected values, write `CLAUDE.md` at the repo root. Use the template
-below, substituting `{PROJECT_DESCRIPTION}` and `{SOURCE_DIRS}` with the values
-collected in Phases 1 and 2.
+**Show the updated checklist.**
+
+Before writing anything, confirm with the user:
+
+> "I am ready to write CLAUDE.md. Here is a summary of what will be generated:
+>
+> - Project: {PROJECT_DESCRIPTION}
+> - Source dirs: {SOURCE_DIRS}
+>
+> Shall I write CLAUDE.md now? (yes/no)"
+
+Wait for the user's confirmation. Only write the file after receiving "yes".
 
 If the user chose to UPDATE an existing CLAUDE.md (not reinitialize), only write
 sections that are absent from the existing file. Do not touch sections already present.
+
+Using the collected values, write `CLAUDE.md` at the repo root using the template below,
+substituting `{PROJECT_DESCRIPTION}` and `{SOURCE_DIRS}` with the values collected
+in Phases 1 and 2.
 
 ````markdown
 # CAIDE — Master Schema
@@ -362,9 +499,30 @@ Each log entry MUST start with this prefix for parsability:
 - Cross-reference all new module pages to at least 2 existing wiki pages.
 ````
 
+After writing, confirm to the user what was written. Then ask:
+> "Phase 4 complete. Ready to move to Phase 5 — Wiki Scaffold? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 4 complete: `[x] Phase 4 — Generate CLAUDE.md`
+
 ---
 
 ### PHASE 5 — Initialize wiki/ Scaffold
+
+**Show the updated checklist.**
+
+Before writing anything, list the files that will be created and ask:
+> "I will create the following wiki scaffold files (existing files will not be
+> overwritten):
+>   • wiki/index.md
+>   • wiki/log.md
+>   • wiki/overview.md
+>   • wiki/hot.md
+>
+> Shall I proceed? (yes/no)"
+
+Wait for the user's confirmation. Only write files after receiving "yes".
 
 Create the following files if they do not already exist. Never overwrite existing files.
 
@@ -447,27 +605,38 @@ updated: {TODAY}
 <!-- Most recent architectural decisions. Updated by /adr. -->
 ```
 
+After writing, confirm to the user which files were created and which were skipped
+(already existed). Then ask:
+> "Phase 5 complete. Ready to move to Phase 6 — Obsidian Config? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 5 complete: `[x] Phase 5 — Wiki Scaffold`
+
 ---
 
 ### PHASE 6 — Configure .obsidian/app.json
 
-CAIDE uses Obsidian to visualize the wiki knowledge graph. The connections graph
-should show only wiki pages (modules, dependencies, components, ADRs) — never
-raw source files, which are tracked by `/scan` but not stored in `wiki/`.
+**Show the updated checklist.**
 
-The `userIgnoreFilters` field in `.obsidian/app.json` tells Obsidian which paths
-to exclude from its vault index.
+Before writing anything, ask the user:
+> "I will configure .obsidian/app.json to exclude source directories from the
+> Obsidian vault index, based on the directories you confirmed in Phase 2.
+>
+> Source dirs to exclude: {SOURCE_DIRS}
+>
+> Shall I proceed? (yes/no)"
+
+Wait for the user's confirmation. Only write the file after receiving "yes".
 
 **Build the ignore list** from the following sources:
-1. All entries in `{SOURCE_DIRS}` collected in Phase 2 — these are source directories
-   that contain raw code, not wiki pages.
+1. All entries in `{SOURCE_DIRS}` collected in Phase 2.
 2. Standard non-wiki directories that should always be excluded:
-   - `src`, `lib`, `assets`, `scripts`, `config`, `build`, `dist`, `out`,
-     `target`, `node_modules`, `.git`, `.claude`, `.github`, `vendor`,
-     `Pods`, `.gradle`, `coverage`, `tmp`, `temp`, `test`, `tests`,
-     `spec`, `specs`, `__pycache__`, `.cache`
-3. Any directory discovered in Phase 2 that was classified as source-like,
-   asset-like, script-like, or config-like (all non-wiki directories).
+   `src`, `lib`, `assets`, `scripts`, `config`, `build`, `dist`, `out`,
+   `target`, `node_modules`, `.git`, `.claude`, `.github`, `vendor`,
+   `Pods`, `.gradle`, `coverage`, `tmp`, `temp`, `test`, `tests`,
+   `spec`, `specs`, `__pycache__`, `.cache`
+3. Any directory discovered in Phase 2 (all non-wiki directories).
 
 **If `.obsidian/app.json` does not exist**, create `.obsidian/` directory and write:
 
@@ -482,16 +651,35 @@ to exclude from its vault index.
 ```
 
 **If `.obsidian/app.json` already exists**, read it, then merge the `userIgnoreFilters`
-array — adding any new entries from the list above without removing existing ones.
-Write the merged file back.
+array — adding any new entries without removing existing ones. Write the merged file back.
 
 Format each entry as a plain directory name without trailing slash (Obsidian convention).
 For nested paths like `assets/shaders`, add both `assets/shaders` and `assets` as
 separate entries so neither level appears in the graph.
 
+After writing, confirm to the user what was written. Then ask:
+> "Phase 6 complete. Ready for the Final Report? (yes/no)"
+
+Wait for confirmation before proceeding.
+
+Mark Phase 6 complete: `[x] Phase 6 — Obsidian Config`
+
 ---
 
 ### PHASE 7 — Final Report
+
+**Show the fully checked checklist:**
+
+```
+[x] Phase 0 — Preflight Check
+[x] Phase 1 — Project Identity
+[x] Phase 2 — Source Directories
+[x] Phase 3 — Skills Installation
+[x] Phase 4 — Generate CLAUDE.md
+[x] Phase 5 — Wiki Scaffold
+[x] Phase 6 — Obsidian Config
+[x] Phase 7 — Final Report
+```
 
 Print a completion summary:
 
@@ -530,11 +718,13 @@ Next steps:
 
 ## Notes
 
-- This skill never reads source file contents — only filenames, extensions, and
-  build manifests (for language/build detection). Source content is left entirely
-  to `/scan`.
-- If a step fails (e.g., skill download fails due to no network), continue with
-  the remaining steps and list failures in the final report. Never abort mid-run.
+- This skill never reads source file contents at any phase — only filenames,
+  extensions, and build manifests (for language/build detection in Phase 1 AUTO only).
+  Source content is left entirely to `/scan`.
+- Only paths relative to the current working directory (the repo root) are ever checked.
+  User-global paths (`~/.claude/`, etc.) are never accessed.
+- If a step fails (e.g., skill download fails due to no network), continue with the
+  remaining steps and list failures in the final report. Never abort mid-run.
 - The `{TODAY}` placeholder should be substituted with the actual current date in
   `YYYY-MM-DD` format wherever it appears in generated file content.
 - The `{SOURCE_DIRS_FORMATTED}` placeholder produces a bulleted markdown list:
