@@ -19,7 +19,8 @@ all existing files are preserved; only missing pieces are created.
 
 ## STRICT OPERATING RULES
 
-These rules override all default assistant behavior and MUST be followed at all times:
+These rules override ALL default assistant behavior and MUST be followed at all times,
+regardless of model size, instruction-following capability, or any other factor:
 
 1. **No independent file evaluation.** Do NOT read, enumerate, glob, or inspect ANY
    source files, directories, or file extensions at any point in this skill UNLESS
@@ -30,19 +31,30 @@ These rules override all default assistant behavior and MUST be followed at all 
    directory (the repo root). Never access `~/.claude/`, user-global paths, or any path
    outside the repo.
 
-3. **No phase proceeds without user confirmation.** After each phase completes, explicitly
-   wait for the user to confirm they are ready to continue. Do not advance automatically.
+3. **HARD STOP after every phase.** After each phase completes, you MUST output the
+   exact text `>>> Waiting for your response before continuing.` and then STOP COMPLETELY.
+   Do NOT write any additional text, do NOT start the next phase, do NOT speculate about
+   what comes next. Output nothing until the user sends their next message.
+   This rule applies to Phases 1 through 6. Phase 7 is the only exception — it runs
+   automatically immediately after Phase 6 writes its files (no user prompt needed).
 
-4. **Preflight is the only phase that runs without a preceding prompt.** All subsequent
-   phases require the user to respond before any action is taken.
+4. **Preflight (Phase 0) is the only phase that runs without a preceding user prompt.**
+   Phase 0 runs immediately after the checklist is displayed. All phases 1–6 require
+   the user to respond before any action is taken.
 
-5. **Ask, then act.** For every phase, present the questions first, wait for the user's
-   full response, then perform any file operations. Never interleave questions with
+5. **Ask, then act.** For every phase, present the questions first, output
+   `>>> Waiting for your response before continuing.`, then STOP. Only after the user
+   replies do you perform any file operations. Never interleave questions with
    file reads or writes.
 
 6. **Do exactly what the phases describe — nothing else.** Do not attempt to understand
    the codebase, summarize code patterns, or make inferences beyond what is explicitly
    instructed in each phase.
+
+7. **Never skip or abbreviate the CLAUDE.md template.** When writing CLAUDE.md in
+   Phase 4, you MUST include every section listed in the template — including
+   Page Conventions, all Workflow sections, Log Format, and Safety Rules. Truncating
+   or omitting any section is a violation of this rule.
 
 ---
 
@@ -179,10 +191,12 @@ Wait for the user's response. Then:
 Store the confirmed result as `{PROJECT_DESCRIPTION}` — a single line suitable for the
 `## Project` section of CLAUDE.md.
 
-After the user has confirmed their answers, tell them Phase 1 is complete and ask:
+After the user has confirmed their answers, output:
 > "Phase 1 complete. Ready to move to Phase 2 — Source Directories? (yes/no)"
 
-Wait for confirmation before proceeding.
+Then output exactly: `>>> Waiting for your response before continuing.`
+
+**STOP. Do not write anything else. Do not start Phase 2. Wait for the user's reply.**
 
 Mark Phase 1 complete: `[x] Phase 1 — Project Identity`
 
@@ -250,10 +264,12 @@ Ask the user to list directories and provide a one-line description for each.
 
 Store the confirmed list as `{SOURCE_DIRS}`.
 
-After the user has confirmed, tell them Phase 2 is complete and ask:
+After the user has confirmed, output:
 > "Phase 2 complete. Ready to move to Phase 3 — Skills Installation? (yes/no)"
 
-Wait for confirmation before proceeding.
+Then output exactly: `>>> Waiting for your response before continuing.`
+
+**STOP. Do not write anything else. Do not start Phase 3. Wait for the user's reply.**
 
 Mark Phase 2 complete: `[x] Phase 2 — Source Directories`
 
@@ -286,30 +302,44 @@ Wait for the user's response.
 
 **If the user says yes:**
 
-Ask for the CAIDE repository URL before attempting any downloads:
-> "What is the CAIDE skills repository URL?
-> (Leave blank to skip skill installation and do it manually later.)"
+The CAIDE skills repository is always: `https://github.com/ImLp/claude-caide`
+Do NOT ask the user for the URL. Use it directly.
 
-Wait for the user's response. If they provide a URL, use it. If they leave it blank,
-skip installation and note it in the final report.
+For each missing skill, run a SEPARATE, INDIVIDUAL download command — one per skill.
+Do NOT batch multiple skills into a single command. Download them one at a time in order.
 
-If a URL is provided, for each missing skill (e.g., `scan`), fetch:
+The raw file URL pattern is:
 ```
-{SKILLS_REPO}/raw/main/.claude/skills/scan/SKILL.md → .claude/skills/scan/SKILL.md
+https://raw.githubusercontent.com/ImLp/claude-caide/main/.claude/skills/{skill}/SKILL.md
 ```
 
-Run the download using `curl -fsSL` or `wget -q -O`. If neither is available,
-instruct the user to manually copy the files and provide the URL.
+For each missing skill (e.g., `scan`, `health`, `impact`, `adr`, `recall`, `trace`),
+first create the directory, then download:
+```
+mkdir -p .claude/skills/{skill}
+curl -fsSL https://raw.githubusercontent.com/ImLp/claude-caide/main/.claude/skills/{skill}/SKILL.md -o .claude/skills/{skill}/SKILL.md
+```
 
-After attempting downloads, report success/failure for each skill.
+If `curl` is not available, try `wget`:
+```
+mkdir -p .claude/skills/{skill}
+wget -q -O .claude/skills/{skill}/SKILL.md https://raw.githubusercontent.com/ImLp/claude-caide/main/.claude/skills/{skill}/SKILL.md
+```
+
+If neither is available, instruct the user to manually copy each file from
+`https://github.com/ImLp/claude-caide` and provide the exact paths.
+
+After ALL individual downloads are complete, report success/failure for each skill.
 
 **If the user says no:**
 Note all skills as skipped in the final report.
 
-After the user's response is handled, ask:
+After the user's response is handled, output:
 > "Phase 3 complete. Ready to move to Phase 4 — Generate CLAUDE.md? (yes/no)"
 
-Wait for confirmation before proceeding.
+Then output exactly: `>>> Waiting for your response before continuing.`
+
+**STOP. Do not write anything else. Do not start Phase 4. Wait for the user's reply.**
 
 Mark Phase 3 complete: `[x] Phase 3 — Skills Installation`
 
@@ -499,10 +529,33 @@ Each log entry MUST start with this prefix for parsability:
 - Cross-reference all new module pages to at least 2 existing wiki pages.
 ````
 
-After writing, confirm to the user what was written. Then ask:
+**Before writing the file**, verify that your generated content includes ALL of the
+following sections. This check is mandatory regardless of model or context size.
+Do NOT write the file until every section in this checklist is present:
+
+- [ ] `## Project` — with {PROJECT_DESCRIPTION}
+- [ ] `## Project Structure` — with all 7 bullet points (src/, wiki/, wiki/index.md, wiki/log.md, wiki/overview.md, wiki/hot.md, CLAUDE.md)
+- [ ] `## Source-Like Directories` — with {SOURCE_DIRS_FORMATTED}
+- [ ] `## Page Conventions` — with ALL four schema blocks (Module/File, Dependency/Link, Component/Class, ADR)
+- [ ] `## Scan Workflow` — all 7 numbered steps
+- [ ] `## Query Workflow` — all 5 numbered steps
+- [ ] `## Health Workflow` — all 6 numbered steps
+- [ ] `## Impact Workflow` — all 5 numbered steps
+- [ ] `## ADR Workflow` — all 5 numbered steps
+- [ ] `## Recall Workflow` — all 4 numbered steps
+- [ ] `## Trace Workflow` — all 6 numbered steps
+- [ ] `## Log Format` — with the prefix pattern
+- [ ] `## Safety Rules` — all 5 bullet points
+
+If any section is missing, complete it before writing. Do not skip any section
+even if the template seems long or your context window is limited.
+
+After writing, confirm to the user what was written. Then output:
 > "Phase 4 complete. Ready to move to Phase 5 — Wiki Scaffold? (yes/no)"
 
-Wait for confirmation before proceeding.
+Then output exactly: `>>> Waiting for your response before continuing.`
+
+**STOP. Do not write anything else. Do not start Phase 5. Wait for the user's reply.**
 
 Mark Phase 4 complete: `[x] Phase 4 — Generate CLAUDE.md`
 
@@ -606,10 +659,12 @@ updated: {TODAY}
 ```
 
 After writing, confirm to the user which files were created and which were skipped
-(already existed). Then ask:
+(already existed). Then output:
 > "Phase 5 complete. Ready to move to Phase 6 — Obsidian Config? (yes/no)"
 
-Wait for confirmation before proceeding.
+Then output exactly: `>>> Waiting for your response before continuing.`
+
+**STOP. Do not write anything else. Do not start Phase 6. Wait for the user's reply.**
 
 Mark Phase 5 complete: `[x] Phase 5 — Wiki Scaffold`
 
@@ -657,12 +712,13 @@ Format each entry as a plain directory name without trailing slash (Obsidian con
 For nested paths like `assets/shaders`, add both `assets/shaders` and `assets` as
 separate entries so neither level appears in the graph.
 
-After writing, confirm to the user what was written. Then ask:
-> "Phase 6 complete. Ready for the Final Report? (yes/no)"
-
-Wait for confirmation before proceeding.
+After writing, confirm to the user what was written. Then output:
+> "Phase 6 complete. Generating the Final Report now…"
 
 Mark Phase 6 complete: `[x] Phase 6 — Obsidian Config`
+
+**Immediately proceed to Phase 7. Do NOT ask the user if they are ready.
+Do NOT wait for any user input. Go directly to Phase 7 and output the Final Report.**
 
 ---
 
